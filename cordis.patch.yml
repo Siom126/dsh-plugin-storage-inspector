@@ -1,0 +1,3 @@
+- insert:
+    - id: storage-inspector
+      name: dsh-plugin-storage-inspector
