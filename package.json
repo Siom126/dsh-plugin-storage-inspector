@@ -22,6 +22,14 @@
     ".": "./index.js",
     "./client": "./client.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Siom126/dsh-plugin-storage-inspector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Siom126/dsh-plugin-storage-inspector/issues"
+  },
+  "homepage": "https://github.com/Siom126/dsh-plugin-storage-inspector#readme",
   "files": [
     "index.js",
     "client.js",
