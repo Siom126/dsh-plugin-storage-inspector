@@ -2914,60 +2914,7 @@ window.__ModuleLoader__.load({
               )
             ),
 
-            // 本地磁盘总可用与已用空间占比指标小部件 (显示在右侧 Header)
-            (() => {
-              const disk = summary?.systemDisk;
-              if (!disk || !disk.supported || !disk.totalBytes) return null;
 
-              const usedPct = disk.usedPercent ?? 0;
-              const availPct = disk.availablePercent ?? (100 - usedPct);
-              const barColor =
-                usedPct >= 90
-                  ? '#ef4444' // 危险红色
-                  : usedPct >= 75
-                  ? '#f59e0b' // 告警琥珀色
-                  : '#10b981'; // 健康绿色
-
-              const tooltip = `本地磁盘空间 (${disk.mount || '根分区'}):\n总容量: ${formatBytes(disk.totalBytes)}\n已用空间: ${formatBytes(disk.usedBytes)} (${usedPct}%)\n可用空间: ${formatBytes(disk.availableBytes)} (${availPct}%)`;
-
-              return h(
-                'div',
-                {
-                  className: 'si-disk-widget',
-                  title: tooltip
-                },
-                h('div', { className: 'si-disk-icon-wrap' }, '💽'),
-                h(
-                  'div',
-                  { className: 'si-disk-info' },
-                  h(
-                    'div',
-                    { className: 'si-disk-text-row' },
-                    h(
-                      'span',
-                      { className: 'si-disk-primary' },
-                      `可用 ${formatBytes(disk.availableBytes)}`
-                    ),
-                    h(
-                      'span',
-                      { className: 'si-disk-secondary' },
-                      `已用 ${usedPct}%`
-                    )
-                  ),
-                  h(
-                    'div',
-                    { className: 'si-disk-bar-bg' },
-                    h('div', {
-                      className: 'si-disk-bar-fill',
-                      style: {
-                        width: `${Math.min(100, Math.max(0, usedPct))}%`,
-                        background: barColor
-                      }
-                    })
-                  )
-                )
-              );
-            })(),
 
             mainView === 'governance'
               ? h(
@@ -3897,47 +3844,54 @@ window.__ModuleLoader__.load({
         return unsubscribe;
       }, []);
 
-      // 动态向左侧栏整个按钮容器挂载/更新右侧胶囊徽标（展示已用占比百分比）
+      // 动态向左侧栏整个按钮容器挂载/更新右侧胶囊徽标（展示可用占比百分比，格式：「可用：XX.XX%」）
       const iconRef = useCallback((node) => {
         if (!node || typeof document === 'undefined') return;
         const btn = node.closest('button, [role="button"], .kB3qhq_panelRow');
         if (!btn) return;
 
         let badge = btn.querySelector('.si-sidebar-badge');
-        // 当尚未获取到数据或 totalBytes 为 0 时，不显示 0.0% 徽标，避免渲染出未就绪的默认值
+        // 当尚未获取到数据或 totalBytes 为 0 时，不显示徽标，避免渲染出未就绪的默认值
         if (!diskStats || !diskStats.supported || !diskStats.totalBytes) {
           if (badge) badge.remove();
           return;
         }
 
-        const pct = typeof diskStats.usedPercent === 'number' ? diskStats.usedPercent : 0;
-        const pctStr = pct.toFixed(1) + '%';
+        // 计算可用空间百分比（保留两位小数，与系统对齐）
+        const availPct = typeof diskStats.availablePercent === 'number'
+          ? diskStats.availablePercent
+          : (100 - (diskStats.usedPercent || 0));
+        const badgeText = `可用：${availPct.toFixed(2)}%`;
+
+        // 警戒色彩（可用 < 10% 警示红，10%~20% 琥珀黄，>= 20% 健康翡翠绿）
         const colorClass =
-          pct >= 90
+          availPct <= 10
             ? 'si-sidebar-badge-red'
-            : pct >= 80
+            : availPct <= 20
             ? 'si-sidebar-badge-amber'
             : 'si-sidebar-badge-green';
 
         if (!badge) {
           badge = document.createElement('span');
           badge.className = `si-sidebar-badge ${colorClass}`;
-          badge.textContent = pctStr;
+          badge.textContent = badgeText;
           btn.appendChild(badge);
         } else {
           badge.className = `si-sidebar-badge ${colorClass}`;
-          badge.textContent = pctStr;
+          badge.textContent = badgeText;
         }
       }, [diskStats]);
 
-      // 提取占比与警戒色（<80% 翡翠绿, 80%-90% 琥珀黄, >=90% 警示红）
+      // 提取占比与警戒色
       const hasValidStats = !!(diskStats && diskStats.supported && diskStats.totalBytes);
-      const pct = hasValidStats ? (diskStats.usedPercent || 0) : null;
+      const availPct = hasValidStats
+        ? (typeof diskStats.availablePercent === 'number' ? diskStats.availablePercent : 100 - (diskStats.usedPercent || 0))
+        : null;
       const dotColor =
-        pct !== null
-          ? pct >= 90
+        availPct !== null
+          ? availPct <= 10
             ? '#ef4444'
-            : pct >= 80
+            : availPct <= 20
             ? '#f59e0b'
             : '#10b981'
           : 'transparent';
@@ -3948,7 +3902,7 @@ window.__ModuleLoader__.load({
           ref: iconRef,
           className: 'si-sidebar-icon-wrap',
           title: hasValidStats
-            ? `本地磁盘空间：可用 ${formatBytes(diskStats.freeBytes)} / 已用 ${pct.toFixed(1)}%`
+            ? `本地磁盘空间：可用 ${formatBytes(diskStats.freeBytes, true)} (${availPct.toFixed(2)}%) / 总容量 ${formatBytes(diskStats.totalBytes, true)}`
             : '本地存储空间分析'
         },
         h(
