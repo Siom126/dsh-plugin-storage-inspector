@@ -1739,6 +1739,1000 @@ window.__ModuleLoader__.load({
         return list;
       }, [data, activeTab, searchQuery]);
 
+      // 当切换到依赖治理标签时，自动拉取治理数据
+      useEffect(() => {
+        if (mainView === 'governance' && !govData && !govLoading) {
+          fetchGovData(false);
+        }
+      }, [mainView, govData, govLoading, fetchGovData]);
+
+      // 渲染跨项目依赖治理总览视图
+      const renderGovernanceView = () => {
+        if (!govData && govLoading) {
+          return h(
+            'div',
+            { className: 'si-loading-box' },
+            '正在扫描项目、提取环境指纹与分析跨项目依赖治理状态，请稍候...'
+          );
+        }
+
+        if (!govData && govError) {
+          return h(
+            'div',
+            { className: 'si-card', style: { borderColor: '#ef4444' } },
+            h('div', { style: { color: '#ef4444', fontWeight: 600, fontSize: '0.95rem' } }, '读取跨项目依赖治理数据失败'),
+            h('div', { style: { fontSize: '0.85rem', color: 'var(--dsw-alias-label-secondary, #475569)', margin: '6px 0 12px' } }, govError),
+            h(
+              'button',
+              {
+                className: 'si-btn si-btn-primary',
+                onClick: () => fetchGovData(true)
+              },
+              '🔄 重新扫描分析'
+            )
+          );
+        }
+
+        if (!govData) {
+          return h(
+            'div',
+            { className: 'si-loading-box' },
+            '正在就绪依赖治理分析引擎...'
+          );
+        }
+
+        const kpi = govData.kpi || {};
+        const nodeBuckets = govData.nodeBuckets || [];
+        const projects = govData.projects || [];
+        const activeProjects = projects.filter((p) => !p.isEmpty);
+        const matrix = govData.matrix || [];
+        const findings = govData.findings || [];
+
+        // 过滤矩阵数据
+        let filteredMatrix = matrix;
+        if (matrixKind !== 'all') {
+          filteredMatrix = filteredMatrix.filter((r) => r.kind === matrixKind);
+        }
+        if (matrixFilter === 'drift-major') {
+          filteredMatrix = filteredMatrix.filter((r) => r.verdict === 'drift-major');
+        } else if (matrixFilter === 'bucket-conflict') {
+          filteredMatrix = filteredMatrix.filter((r) => r.verdict === 'bucket-conflict');
+        } else if (matrixFilter === 'identical') {
+          filteredMatrix = filteredMatrix.filter((r) => r.verdict === 'identical');
+        } else if (matrixFilter === 'multi-consumer') {
+          filteredMatrix = filteredMatrix.filter((r) => r.consumerCount > 1);
+        }
+        if (matrixSearch.trim()) {
+          const q = matrixSearch.trim().toLowerCase();
+          filteredMatrix = filteredMatrix.filter(
+            (r) =>
+              r.name.toLowerCase().includes(q) ||
+              (r.resolvedVersions && r.resolvedVersions.some((v) => v.toLowerCase().includes(q)))
+          );
+        }
+
+        // 过滤治理发现项
+        let filteredFindings = findings;
+        if (findingLevelFilter !== 'all') {
+          filteredFindings = filteredFindings.filter((f) => f.level === findingLevelFilter);
+        }
+
+        return h(
+          'div',
+          { className: 'si-gov-container' },
+
+          // A. 顶部提示条与状态信息
+          h(
+            'div',
+            { className: 'si-gov-header-bar' },
+            h(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' } },
+              h('span', { className: 'si-gov-badge-readonly' }, '🛡️ 严格只读事实分析'),
+              h(
+                'span',
+                { style: { fontSize: '0.8rem', color: 'var(--dsw-alias-label-secondary, #475569)' } },
+                '基于 package.json、lockfile 与环境配置文件构建，不修改任何文件系统，安全无写操作'
+              )
+            ),
+            h(
+              'div',
+              { style: { fontSize: '0.74rem', color: 'var(--dsw-alias-label-tertiary, #64748b)' } },
+              govData.cached
+                ? `⚡ 命中内存缓存（TTL 还剩 ${govData.ttl ?? 0}s）`
+                : `🕒 最新分析时间: ${new Date(govData.timestamp || Date.now()).toLocaleTimeString()}`
+            )
+          ),
+
+          // B. 五大核心指标 KPI 卡片
+          h(
+            'div',
+            { className: 'si-gov-kpi-grid' },
+            h(
+              'div',
+              { className: 'si-gov-kpi-card' },
+              h('div', { className: 'si-gov-kpi-label' }, '📦 纳入治理项目'),
+              h('div', { className: 'si-gov-kpi-value' }, kpi.totalProjects ?? projects.length),
+              h(
+                'div',
+                { className: 'si-gov-kpi-desc' },
+                `活跃: ${kpi.activeProjects ?? activeProjects.length} / 空依赖: ${kpi.emptyProjects ?? 0}`
+              )
+            ),
+            h(
+              'div',
+              { className: 'si-gov-kpi-card' },
+              h('div', { className: 'si-gov-kpi-label' }, '📚 依赖包总数'),
+              h('div', { className: 'si-gov-kpi-value' }, kpi.totalUniquePackages ?? matrix.length),
+              h('div', { className: 'si-gov-kpi-desc' }, `多项目复用: ${kpi.multiConsumerPackages ?? 0} 个`)
+            ),
+            h(
+              'div',
+              { className: 'si-gov-kpi-card' },
+              h('div', { className: 'si-gov-kpi-label' }, '⚠️ 主版本漂移'),
+              h(
+                'div',
+                {
+                  className: 'si-gov-kpi-value',
+                  style: { color: (kpi.driftMajorPackages || 0) > 0 ? '#f59e0b' : 'inherit' }
+                },
+                kpi.driftMajorPackages ?? 0
+              ),
+              h('div', { className: 'si-gov-kpi-desc' }, `次版本/补丁漂移: ${kpi.driftMinorPackages ?? 0} 个`)
+            ),
+            h(
+              'div',
+              { className: 'si-gov-kpi-card' },
+              h('div', { className: 'si-gov-kpi-label' }, '🚫 Node 分桶冲突'),
+              h(
+                'div',
+                {
+                  className: 'si-gov-kpi-value',
+                  style: { color: (kpi.bucketConflictPackages || 0) > 0 ? '#ef4444' : 'inherit' }
+                },
+                kpi.bucketConflictPackages ?? 0
+              ),
+              h('div', { className: 'si-gov-kpi-desc' }, `共 ${kpi.nodeBucketCount ?? nodeBuckets.length} 个运行时环境`)
+            ),
+            h(
+              'div',
+              { className: 'si-gov-kpi-card' },
+              h('div', { className: 'si-gov-kpi-label' }, '🟢 完全同版本'),
+              h(
+                'div',
+                {
+                  className: 'si-gov-kpi-value',
+                  style: { color: '#10b981' }
+                },
+                kpi.identicalPackages ?? 0
+              ),
+              h('div', { className: 'si-gov-kpi-desc' }, '同环境就绪收敛候选')
+            )
+          ),
+
+          // C. Node 运行环境分桶洞察
+          h(
+            'div',
+            { className: 'si-gov-section' },
+            h(
+              'div',
+              { className: 'si-gov-section-header' },
+              h(
+                'div',
+                null,
+                h(
+                  'div',
+                  { className: 'si-gov-section-title' },
+                  '⚙️ Node 运行环境分桶洞察',
+                  h('span', { className: 'si-badge si-badge-blue' }, `${nodeBuckets.length} 个环境分桶`)
+                ),
+                h(
+                  'div',
+                  { className: 'si-gov-section-subtitle' },
+                  '通过项目 .nvmrc / .node-version / package.json engines 聚类，跨桶项目天然隔离不可共享 node_modules'
+                )
+              )
+            ),
+            h(
+              'div',
+              { className: 'si-gov-bucket-grid' },
+              nodeBuckets.map((bucket) => {
+                const confLabel =
+                  bucket.confidence === 'exact'
+                    ? '精确锁定'
+                    : bucket.confidence === 'multi'
+                    ? '范围模糊'
+                    : '缺失声明';
+                const confBadgeClass =
+                  bucket.confidence === 'exact'
+                    ? 'si-badge-green'
+                    : bucket.confidence === 'multi'
+                    ? 'si-badge-amber'
+                    : 'si-badge-gray';
+
+                return h(
+                  'div',
+                  {
+                    key: bucket.bucketKey,
+                    className: `si-gov-bucket-card bucket-${bucket.confidence || 'exact'}`
+                  },
+                  h(
+                    'div',
+                    { className: 'si-gov-bucket-header' },
+                    h(
+                      'div',
+                      null,
+                      h('div', { className: 'si-gov-bucket-title' }, bucket.label || bucket.bucketKey),
+                      h('div', { className: 'si-gov-bucket-key' }, bucket.bucketKey)
+                    ),
+                    h('span', { className: `si-badge ${confBadgeClass}` }, confLabel)
+                  ),
+                  h(
+                    'div',
+                    { className: 'si-gov-bucket-projects' },
+                    (bucket.projectIds || []).map((pid) => {
+                      const proj = projects.find((p) => p.id === pid);
+                      return h(
+                        'span',
+                        {
+                          key: pid,
+                          className: 'si-gov-project-tag',
+                          onClick: () => openProjectDrawer(pid),
+                          title: '点击查看该项目详细依赖事实'
+                        },
+                        '📦 ',
+                        proj ? proj.name : pid
+                      );
+                    })
+                  ),
+                  bucket.confidence === 'missing'
+                    ? h(
+                        'div',
+                        { className: 'si-gov-notice-box si-gov-notice-warning' },
+                        '该桶内项目未声明 Node 版本约束，生产构建与跨机部署可能隐式漂移，建议补全 .nvmrc'
+                      )
+                    : null
+                );
+              })
+            )
+          ),
+
+          // D. 跨项目依赖版本漂移矩阵
+          h(
+            'div',
+            { className: 'si-gov-section' },
+            h(
+              'div',
+              { className: 'si-gov-section-header' },
+              h(
+                'div',
+                null,
+                h(
+                  'div',
+                  { className: 'si-gov-section-title' },
+                  '🧭 跨项目依赖版本漂移矩阵 (Multi-Project Drift Matrix)'
+                ),
+                h(
+                  'div',
+                  { className: 'si-gov-section-subtitle' },
+                  '横向比对各项目在同一依赖包上的声明与解析版本，快速锁定主版本分叉与跨环境复用风险'
+                )
+              ),
+              // 顶部操作栏：过滤与搜索
+              h(
+                'div',
+                { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
+                // 搜索输入框
+                h('input', {
+                  type: 'text',
+                  className: 'si-search-input',
+                  style: { minWidth: '180px', height: '30px', fontSize: '0.78rem' },
+                  placeholder: '🔍 搜索依赖包名或版本...',
+                  value: matrixSearch,
+                  onChange: (e) => setMatrixSearch(e.target.value)
+                }),
+                // 依赖类别下拉
+                h(
+                  'select',
+                  {
+                    value: matrixKind,
+                    onChange: (e) => setMatrixKind(e.target.value),
+                    className: 'si-select',
+                    style: {
+                      height: '30px',
+                      fontSize: '0.78rem',
+                      padding: '0 8px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--dsw-alias-border-l2, #cbd5e1)',
+                      background: 'var(--dsw-alias-bg-base, #ffffff)',
+                      color: 'var(--dsw-alias-label-primary, #0f1115)'
+                    }
+                  },
+                  h('option', { value: 'all' }, '全部依赖类型'),
+                  h('option', { value: 'prod' }, '生产依赖 (dependencies)'),
+                  h('option', { value: 'dev' }, '开发依赖 (devDependencies)')
+                )
+              )
+            ),
+
+            // 过滤标签组
+            h(
+              'div',
+              { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+              h(
+                'button',
+                {
+                  className: `si-tab-pill ${matrixFilter === 'all' ? 'active' : ''}`,
+                  onClick: () => setMatrixFilter('all')
+                },
+                `全部 (${matrix.length})`
+              ),
+              h(
+                'button',
+                {
+                  className: `si-tab-pill ${matrixFilter === 'drift-major' ? 'active' : ''}`,
+                  onClick: () => setMatrixFilter('drift-major')
+                },
+                `⚠️ 主版本漂移 (${kpi.driftMajorPackages ?? 0})`
+              ),
+              h(
+                'button',
+                {
+                  className: `si-tab-pill ${matrixFilter === 'bucket-conflict' ? 'active' : ''}`,
+                  onClick: () => setMatrixFilter('bucket-conflict')
+                },
+                `🚫 分桶冲突 (${kpi.bucketConflictPackages ?? 0})`
+              ),
+              h(
+                'button',
+                {
+                  className: `si-tab-pill ${matrixFilter === 'identical' ? 'active' : ''}`,
+                  onClick: () => setMatrixFilter('identical')
+                },
+                `🟢 完全同版本 (${kpi.identicalPackages ?? 0})`
+              ),
+              h(
+                'button',
+                {
+                  className: `si-tab-pill ${matrixFilter === 'multi-consumer' ? 'active' : ''}`,
+                  onClick: () => setMatrixFilter('multi-consumer')
+                },
+                `👥 多项目引用 (${kpi.multiConsumerPackages ?? 0})`
+              )
+            ),
+
+            // 矩阵表格
+            h(
+              'div',
+              { className: 'si-gov-matrix-wrap' },
+              h(
+                'table',
+                { className: 'si-gov-matrix-table' },
+                h(
+                  'thead',
+                  null,
+                  h(
+                    'tr',
+                    null,
+                    h('th', { style: { minWidth: '150px' } }, '依赖包名'),
+                    h('th', { style: { minWidth: '70px' } }, '类型'),
+                    h('th', { style: { minWidth: '100px' } }, '判定结论'),
+                    h('th', { style: { minWidth: '90px' } }, '引用项目'),
+                    h('th', { style: { minWidth: '130px' } }, '涉及版本'),
+                    activeProjects.map((p) =>
+                      h(
+                        'th',
+                        {
+                          key: p.id,
+                          style: { cursor: 'pointer', textAlign: 'center', minWidth: '110px' },
+                          onClick: () => openProjectDrawer(p.id),
+                          title: `点击查看 ${p.name} 项目详情`
+                        },
+                        h('span', { style: { textDecoration: 'underline' } }, p.name)
+                      )
+                    )
+                  )
+                ),
+                h(
+                  'tbody',
+                  null,
+                  filteredMatrix.length === 0
+                    ? h(
+                        'tr',
+                        null,
+                        h(
+                          'td',
+                          {
+                            colSpan: 5 + activeProjects.length,
+                            style: { textAlign: 'center', padding: '30px', color: 'var(--dsw-alias-label-tertiary, #64748b)' }
+                          },
+                          '没有匹配的依赖项记录'
+                        )
+                      )
+                    : filteredMatrix.map((row) => {
+                        const isExpanded = activeMatrixDetailRow === row.name;
+                        const badgeCls =
+                          row.level === 'blocked'
+                            ? 'si-badge-blocked'
+                            : row.level === 'warn'
+                            ? 'si-badge-warn'
+                            : row.level === 'candidate'
+                            ? 'si-badge-candidate'
+                            : 'si-badge-info';
+
+                        return h(
+                          React.Fragment,
+                          { key: row.name },
+                          h(
+                            'tr',
+                            {
+                              className: `si-gov-matrix-row ${isExpanded ? 'active' : ''}`,
+                              onClick: () => setActiveMatrixDetailRow(isExpanded ? null : row.name),
+                              style: { cursor: 'pointer' }
+                            },
+                            h(
+                              'td',
+                              { style: { fontWeight: 600, fontFamily: 'monospace' } },
+                              row.name
+                            ),
+                            h(
+                              'td',
+                              null,
+                              h(
+                                'span',
+                                {
+                                  className: `si-badge ${row.kind === 'prod' ? 'si-badge-blue' : 'si-badge-gray'}`,
+                                  style: { fontSize: '0.7rem' }
+                                },
+                                row.kind === 'prod' ? 'prod' : 'dev'
+                              )
+                            ),
+                            h(
+                              'td',
+                              null,
+                              h(
+                                'span',
+                                { className: `si-badge ${badgeCls}`, style: { fontSize: '0.72rem' } },
+                                row.verdictLabel
+                              )
+                            ),
+                            h('td', null, `${row.consumerCount} 个项目`),
+                            h(
+                              'td',
+                              null,
+                              (row.resolvedVersions || []).map((v) =>
+                                h(
+                                  'span',
+                                  {
+                                    key: v,
+                                    className: 'si-gov-cell-badge',
+                                    style: { background: 'var(--dsw-alias-bg-layer-2, #f1f5f9)', marginRight: '4px' }
+                                  },
+                                  v
+                                )
+                              )
+                            ),
+                            activeProjects.map((p) => {
+                              const cell = row.projects?.[p.id];
+                              if (!cell) {
+                                return h(
+                                  'td',
+                                  { key: p.id, style: { textAlign: 'center', color: '#cbd5e1' } },
+                                  '-'
+                                );
+                              }
+                              return h(
+                                'td',
+                                { key: p.id, style: { textAlign: 'center' } },
+                                h(
+                                  'span',
+                                  {
+                                    className: 'si-gov-cell-badge',
+                                    style: {
+                                      background: cell.exact ? '#dcfce7' : '#fef3c7',
+                                      color: cell.exact ? '#166534' : '#92400e',
+                                      fontWeight: cell.exact ? 600 : 400
+                                    },
+                                    title: `声明: ${cell.range} | 锁定: ${cell.resolved || '无锁'} | 桶: ${cell.bucket}`
+                                  },
+                                  cell.resolved || cell.range
+                                )
+                              );
+                            })
+                          ),
+                          // 点击展开该依赖行的详细信息
+                          isExpanded &&
+                            h(
+                              'tr',
+                              { style: { background: 'var(--dsw-alias-bg-layer-1, #f8fafc)' } },
+                              h(
+                                'td',
+                                { colSpan: 5 + activeProjects.length, style: { padding: '12px 18px' } },
+                                h(
+                                  'div',
+                                  { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+                                  h(
+                                    'div',
+                                    { style: { fontWeight: 600, fontSize: '0.82rem' } },
+                                    `🔍 依赖详情: ${row.name} (${row.verdictLabel})`
+                                  ),
+                                  h(
+                                    'div',
+                                    { style: { display: 'flex', gap: '12px', flexWrap: 'wrap' } },
+                                    Object.values(row.projects || {}).map((item) =>
+                                      h(
+                                        'div',
+                                        {
+                                          key: item.projectId,
+                                          style: {
+                                            padding: '6px 10px',
+                                            borderRadius: '6px',
+                                            background: 'var(--dsw-alias-bg-base, #ffffff)',
+                                            border: '1px solid var(--dsw-alias-border-l2, #e2e8f0)',
+                                            fontSize: '0.75rem'
+                                          }
+                                        },
+                                        h('strong', null, item.projectName),
+                                        h('div', null, `声明范围: ${item.range}`),
+                                        h('div', null, `锁定版本: ${item.resolved || '未锁定'}`),
+                                        h(
+                                          'div',
+                                          { style: { color: 'var(--dsw-alias-label-tertiary, #64748b)' } },
+                                          `环境分桶: ${item.bucket}`
+                                        )
+                                      )
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                        );
+                      })
+                )
+              )
+            )
+          ),
+
+          // E. 架构与治理发现建议清单
+          h(
+            'div',
+            { className: 'si-gov-section' },
+            h(
+              'div',
+              { className: 'si-gov-section-header' },
+              h(
+                'div',
+                null,
+                h(
+                  'div',
+                  { className: 'si-gov-section-title' },
+                  '📋 治理发现项与落地建议 (Findings & Recommendations)',
+                  h('span', { className: 'si-badge si-badge-gray' }, `${findings.length} 条事实发现`)
+                ),
+                h(
+                  'div',
+                  { className: 'si-gov-section-subtitle' },
+                  '四级严重度分级建议；严格遵循零写操作与只读审计原则，清晰指出版本漂移证据链'
+                )
+              ),
+              // 严重度过滤
+              h(
+                'div',
+                { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+                h(
+                  'button',
+                  {
+                    className: `si-tab-pill ${findingLevelFilter === 'all' ? 'active' : ''}`,
+                    onClick: () => setFindingLevelFilter('all')
+                  },
+                  `全部 (${findings.length})`
+                ),
+                h(
+                  'button',
+                  {
+                    className: `si-tab-pill ${findingLevelFilter === 'blocked' ? 'active' : ''}`,
+                    onClick: () => setFindingLevelFilter('blocked')
+                  },
+                  '🚫 阻断级'
+                ),
+                h(
+                  'button',
+                  {
+                    className: `si-tab-pill ${findingLevelFilter === 'warn' ? 'active' : ''}`,
+                    onClick: () => setFindingLevelFilter('warn')
+                  },
+                  '⚠️ 警告级'
+                ),
+                h(
+                  'button',
+                  {
+                    className: `si-tab-pill ${findingLevelFilter === 'candidate' ? 'active' : ''}`,
+                    onClick: () => setFindingLevelFilter('candidate')
+                  },
+                  '🟢 收敛候选'
+                ),
+                h(
+                  'button',
+                  {
+                    className: `si-tab-pill ${findingLevelFilter === 'info' ? 'active' : ''}`,
+                    onClick: () => setFindingLevelFilter('info')
+                  },
+                  'ℹ️ 架构提示'
+                )
+              )
+            ),
+
+            // 发现项列表卡片
+            h(
+              'div',
+              { className: 'si-gov-findings-list' },
+              filteredFindings.length === 0
+                ? h(
+                    'div',
+                    { className: 'si-empty-box' },
+                    '当前筛选条件下没有待处理的发现项'
+                  )
+                : filteredFindings.map((finding) => {
+                    const badgeCls =
+                      finding.level === 'blocked'
+                        ? 'si-badge-blocked'
+                        : finding.level === 'warn'
+                        ? 'si-badge-warn'
+                        : finding.level === 'candidate'
+                        ? 'si-badge-candidate'
+                        : 'si-badge-info';
+
+                    return h(
+                      'div',
+                      {
+                        key: finding.id,
+                        className: `si-gov-finding-card level-${finding.level}`
+                      },
+                      h(
+                        'div',
+                        { className: 'si-gov-finding-header' },
+                        h(
+                          'div',
+                          { className: 'si-gov-finding-title' },
+                          finding.title
+                        ),
+                        h(
+                          'span',
+                          { className: `si-badge ${badgeCls}` },
+                          finding.level.toUpperCase()
+                        )
+                      ),
+                      finding.description &&
+                        h('div', { className: 'si-gov-finding-desc' }, finding.description),
+                      finding.evidence &&
+                        finding.evidence.length > 0 &&
+                        h(
+                          'div',
+                          { className: 'si-gov-evidence-box' },
+                          h(
+                            'div',
+                            { style: { fontWeight: 600, fontSize: '0.74rem', color: 'var(--dsw-alias-label-secondary, #475569)' } },
+                            '🔍 事实证据链条 (Evidence):'
+                          ),
+                          h(
+                            'ul',
+                            { className: 'si-gov-evidence-list' },
+                            finding.evidence.map((ev, i) =>
+                              h('li', { key: i }, ev)
+                            )
+                          )
+                        ),
+                      finding.recommendation &&
+                        h(
+                          'div',
+                          { className: 'si-gov-rec-box' },
+                          h('strong', null, '💡 治理建议: '),
+                          finding.recommendation
+                        ),
+                      h(
+                        'div',
+                        { style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' } },
+                        h(
+                          'span',
+                          { style: { fontSize: '0.72rem', color: 'var(--dsw-alias-label-tertiary, #64748b)' } },
+                          '关联项目:'
+                        ),
+                        (finding.projectIds || []).map((pid) =>
+                          h(
+                            'span',
+                            {
+                              key: pid,
+                              className: 'si-gov-project-tag',
+                              onClick: () => openProjectDrawer(pid),
+                              title: '点击打开该项目依赖抽屉'
+                            },
+                            '📦 ',
+                            pid
+                          )
+                        )
+                      )
+                    );
+                  })
+            )
+          )
+        );
+      };
+
+      // 渲染项目详情滑动抽屉
+      const renderProjectDrawer = () => {
+        if (!drawerProjectId) return null;
+
+        const proj = drawerData?.project;
+        const dependencies = drawerData?.dependencies || [];
+
+        // 过滤依赖
+        let filteredDeps = dependencies;
+        if (drawerKindFilter !== 'all') {
+          filteredDeps = filteredDeps.filter((d) => d.kind === drawerKindFilter);
+        }
+        if (drawerSearch.trim()) {
+          const q = drawerSearch.trim().toLowerCase();
+          filteredDeps = filteredDeps.filter(
+            (d) =>
+              d.name.toLowerCase().includes(q) ||
+              (d.resolved && d.resolved.toLowerCase().includes(q)) ||
+              (d.range && d.range.toLowerCase().includes(q))
+          );
+        }
+
+        return h(
+          'div',
+          {
+            className: 'si-gov-drawer-mask',
+            onClick: () => setDrawerProjectId(null)
+          },
+          h(
+            'div',
+            {
+              className: 'si-gov-drawer',
+              onClick: (e) => e.stopPropagation()
+            },
+            // 抽屉头部
+            h(
+              'div',
+              { className: 'si-gov-drawer-header' },
+              h(
+                'div',
+                { className: 'si-gov-drawer-title' },
+                h('span', null, '📦 项目依赖事实:'),
+                h('span', { style: { fontFamily: 'monospace' } }, proj ? proj.name : drawerProjectId)
+              ),
+              h(
+                'button',
+                {
+                  className: 'si-gov-drawer-close',
+                  onClick: () => setDrawerProjectId(null),
+                  title: '关闭抽屉'
+                },
+                '✕'
+              )
+            ),
+
+            // 抽屉主体
+            h(
+              'div',
+              { className: 'si-gov-drawer-body' },
+              drawerLoading
+                ? h(
+                    'div',
+                    { className: 'si-loading-box' },
+                    '正在提取项目依赖事实与环境指纹...'
+                  )
+                : !drawerData || !proj
+                ? h(
+                    'div',
+                    { className: 'si-empty-box' },
+                    '未找到该项目的依赖详情数据'
+                  )
+                : h(
+                    React.Fragment,
+                    null,
+
+                    // 1. 基本信息卡片
+                    h(
+                      'div',
+                      {
+                        style: {
+                          background: 'var(--dsw-alias-bg-layer-1, #f8fafc)',
+                          border: '1px solid var(--dsw-alias-border-l2, #e2e8f0)',
+                          borderRadius: '8px',
+                          padding: '14px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px'
+                        }
+                      },
+                      h(
+                        'div',
+                        { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                        h('strong', { style: { fontSize: '0.92rem' } }, proj.name),
+                        h(
+                          'span',
+                          { className: `si-badge ${proj.hasLockfile ? 'si-badge-green' : 'si-badge-amber'}` },
+                          proj.hasLockfile ? `Lockfile: ${proj.lockfileType}` : '无锁文件 (No Lockfile)'
+                        )
+                      ),
+                      h(
+                        'div',
+                        { style: { fontSize: '0.76rem', color: 'var(--dsw-alias-label-secondary, #475569)', wordBreak: 'break-all' } },
+                        `工作区: ${proj.workspaceName || '-'} | 相对路径: ${proj.relativePath || './'}`
+                      ),
+                      h(
+                        'div',
+                        { style: { fontSize: '0.74rem', color: 'var(--dsw-alias-label-tertiary, #64748b)', wordBreak: 'break-all', fontFamily: 'monospace' } },
+                        proj.projectPath
+                      ),
+                      h(
+                        'div',
+                        { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' } },
+                        h(
+                          'span',
+                          { className: 'si-badge si-badge-blue' },
+                          `Node 环境: ${proj.runtime?.targetNodeVersion || '未明确声明'} (${proj.runtime?.confidence || 'missing'})`
+                        ),
+                        h(
+                          'span',
+                          { className: 'si-badge si-badge-gray' },
+                          `平台: ${proj.runtime?.platform || 'darwin'}-${proj.runtime?.arch || 'arm64'}`
+                        ),
+                        h(
+                          'span',
+                          { className: 'si-badge si-badge-gray' },
+                          `包管理器: ${proj.packageManager || '未知'}`
+                        )
+                      ),
+                      h(
+                        'div',
+                        { style: { fontSize: '0.78rem', marginTop: '4px', fontWeight: 500 } },
+                        `生产依赖: ${proj.depCounts?.prod || 0} / 开发依赖: ${proj.depCounts?.dev || 0} / 合计: ${proj.depCounts?.total || 0}`
+                      )
+                    ),
+
+                    // 2. 项目涉及的治理发现项
+                    drawerData.findings && drawerData.findings.length > 0 &&
+                      h(
+                        'div',
+                        { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+                        h('div', { style: { fontWeight: 600, fontSize: '0.85rem' } }, '⚠️ 该项目涉及的治理发现:'),
+                        drawerData.findings.map((f) =>
+                          h(
+                            'div',
+                            {
+                              key: f.id,
+                              style: {
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                borderLeft: '3px solid #f59e0b',
+                                background: 'rgba(254, 252, 232, 0.4)',
+                                fontSize: '0.76rem'
+                              }
+                            },
+                            h('div', { style: { fontWeight: 600 } }, f.title),
+                            f.recommendation &&
+                              h('div', { style: { color: 'var(--dsw-alias-label-secondary, #475569)', marginTop: '2px' } }, f.recommendation)
+                          )
+                        )
+                      ),
+
+                    // 3. 依赖事实列表
+                    h(
+                      'div',
+                      { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+                      h(
+                        'div',
+                        { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' } },
+                        h('div', { style: { fontWeight: 600, fontSize: '0.88rem' } }, `📋 完整依赖事实清单 (${filteredDeps.length})`),
+                        h(
+                          'div',
+                          { style: { display: 'flex', gap: '6px' } },
+                          h(
+                            'button',
+                            {
+                              className: `si-tab-pill ${drawerKindFilter === 'all' ? 'active' : ''}`,
+                              onClick: () => setDrawerKindFilter('all')
+                            },
+                            '全部'
+                          ),
+                          h(
+                            'button',
+                            {
+                              className: `si-tab-pill ${drawerKindFilter === 'prod' ? 'active' : ''}`,
+                              onClick: () => setDrawerKindFilter('prod')
+                            },
+                            'prod'
+                          ),
+                          h(
+                            'button',
+                            {
+                              className: `si-tab-pill ${drawerKindFilter === 'dev' ? 'active' : ''}`,
+                              onClick: () => setDrawerKindFilter('dev')
+                            },
+                            'dev'
+                          )
+                        )
+                      ),
+                      h('input', {
+                        type: 'text',
+                        className: 'si-search-input',
+                        placeholder: '🔍 过滤该项目依赖包名或版本...',
+                        value: drawerSearch,
+                        onChange: (e) => setDrawerSearch(e.target.value)
+                      }),
+                      h(
+                        'table',
+                        { className: 'si-gov-dep-table' },
+                        h(
+                          'thead',
+                          null,
+                          h(
+                            'tr',
+                            null,
+                            h('th', null, '依赖包名'),
+                            h('th', null, '类别'),
+                            h('th', null, '声明范围 (Range)'),
+                            h('th', null, '解析锁定 (Resolved)'),
+                            h('th', null, '状态')
+                          )
+                        ),
+                        h(
+                          'tbody',
+                          null,
+                          filteredDeps.length === 0
+                            ? h(
+                                'tr',
+                                null,
+                                h(
+                                  'td',
+                                  { colSpan: 5, style: { textAlign: 'center', color: 'var(--dsw-alias-label-tertiary, #64748b)', padding: '20px' } },
+                                  '暂无依赖数据'
+                                )
+                              )
+                            : filteredDeps.map((dep) =>
+                                h(
+                                  'tr',
+                                  { key: dep.name },
+                                  h('td', { style: { fontFamily: 'monospace', fontWeight: 600 } }, dep.name),
+                                  h(
+                                    'td',
+                                    null,
+                                    h(
+                                      'span',
+                                      {
+                                        className: `si-badge ${dep.kind === 'prod' ? 'si-badge-blue' : 'si-badge-gray'}`,
+                                        style: { fontSize: '0.68rem' }
+                                      },
+                                      dep.kind
+                                    )
+                                  ),
+                                  h('td', { style: { fontFamily: 'monospace' } }, dep.range),
+                                  h(
+                                    'td',
+                                    { style: { fontFamily: 'monospace', fontWeight: dep.exact ? 600 : 400 } },
+                                    dep.resolved || '-'
+                                  ),
+                                  h(
+                                    'td',
+                                    null,
+                                    dep.exact
+                                      ? h('span', { className: 'si-badge si-badge-green', style: { fontSize: '0.68rem' } }, '精确锁定')
+                                      : h('span', { className: 'si-badge si-badge-amber', style: { fontSize: '0.68rem' } }, '范围未锁')
+                                  )
+                                )
+                              )
+                        )
+                      )
+                    )
+                  )
+            )
+          )
+        );
+      };
+
       if (loading && !data) {
         return h(
           'div',
