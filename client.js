@@ -17,6 +17,9 @@ window.__ModuleLoader__.load({
     const REFRESH_URL = '/api/storage-inspector/refresh';
     const CLEANUP_TARGETS_URL = '/api/storage-inspector/cleanup/targets';
     const CLEANUP_EXECUTE_URL = '/api/storage-inspector/cleanup/execute';
+    const GOV_OVERVIEW_URL = '/api/storage-inspector/deps/overview';
+    const GOV_PROJECT_URL = '/api/storage-inspector/deps/project';
+    const GOV_REFRESH_URL = '/api/storage-inspector/deps/refresh';
 
     // 格式化字节数
     function formatBytes(bytes) {
@@ -729,6 +732,490 @@ window.__ModuleLoader__.load({
   justify-content: space-between;
   gap: 10px;
 }
+
+/* ==================== 依赖治理主视图 CSS (SPEC-DEPENDENCY-GOVERNANCE) ==================== */
+.si-gov-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.si-gov-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l1, #e2e8f0);
+}
+
+.si-gov-badge-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+.si-gov-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.si-gov-kpi-card {
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  border: 1px solid var(--dsw-alias-border-l2, #e2e8f0);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.si-gov-kpi-label {
+  font-size: 0.8rem;
+  color: var(--dsw-alias-label-secondary, #475569);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.si-gov-kpi-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  line-height: 1.2;
+}
+
+.si-gov-kpi-desc {
+  font-size: 0.73rem;
+  color: var(--dsw-alias-label-tertiary, #64748b);
+  display: flex;
+  gap: 8px;
+}
+
+.si-gov-section {
+  background: var(--dsw-alias-bg-base, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l2, #e2e8f0);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.si-gov-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.si-gov-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-gov-section-subtitle {
+  font-size: 0.78rem;
+  color: var(--dsw-alias-label-secondary, #475569);
+  margin-top: 2px;
+}
+
+/* Node 分桶卡片 */
+.si-gov-bucket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.si-gov-bucket-card {
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--dsw-alias-border-l1, #e2e8f0);
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  transition: all 0.15s ease;
+}
+
+.si-gov-bucket-card.bucket-exact {
+  border-color: #86efac;
+  background: rgba(240, 253, 244, 0.5);
+}
+
+.si-gov-bucket-card.bucket-multi {
+  border-color: #fcd34d;
+  background: rgba(254, 252, 232, 0.5);
+}
+
+.si-gov-bucket-card.bucket-missing {
+  border-color: #fca5a5;
+  background: rgba(254, 242, 242, 0.5);
+}
+
+.si-gov-bucket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.si-gov-bucket-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #0f1115);
+}
+
+.si-gov-bucket-key {
+  font-size: 0.73rem;
+  color: var(--dsw-alias-label-tertiary, #64748b);
+  font-family: monospace;
+}
+
+.si-gov-bucket-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-gov-project-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-base, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l2, #cbd5e1);
+  font-size: 0.75rem;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.si-gov-project-tag:hover {
+  border-color: #3b82f6;
+  color: #2563eb;
+  background: #eff6ff;
+  transform: translateY(-1px);
+}
+
+.si-gov-notice-box {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.si-gov-notice-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.si-gov-notice-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+/* 矩阵表格 */
+.si-gov-matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--dsw-alias-border-l2, #e2e8f0);
+  border-radius: 6px;
+  max-height: 560px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.si-gov-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.si-gov-matrix-table th {
+  position: sticky;
+  top: 0;
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  border-bottom: 2px solid var(--dsw-alias-border-l2, #cbd5e1);
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.si-gov-matrix-table td {
+  border-bottom: 1px solid var(--dsw-alias-border-l1, #e2e8f0);
+  padding: 8px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.si-gov-matrix-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #f8fafc);
+}
+
+.si-gov-matrix-row.active {
+  background: #eff6ff;
+}
+
+.si-gov-cell-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: monospace;
+}
+
+/* 严重度与判定徽标 */
+.si-badge-blocked {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  font-weight: 600;
+}
+
+.si-badge-warn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  font-weight: 600;
+}
+
+.si-badge-candidate {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+  font-weight: 600;
+}
+
+.si-badge-info {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #7dd3fc;
+}
+
+.si-badge-unlocked {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+/* 治理发现项 */
+.si-gov-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.si-gov-finding-card {
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  border: 1px solid var(--dsw-alias-border-l2, #e2e8f0);
+  border-left-width: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.si-gov-finding-card.level-blocked {
+  border-left-color: #ef4444;
+  background: rgba(254, 242, 242, 0.3);
+}
+
+.si-gov-finding-card.level-warn {
+  border-left-color: #f59e0b;
+  background: rgba(254, 252, 232, 0.3);
+}
+
+.si-gov-finding-card.level-candidate {
+  border-left-color: #10b981;
+  background: rgba(240, 253, 244, 0.3);
+}
+
+.si-gov-finding-card.level-info {
+  border-left-color: #3b82f6;
+  background: rgba(239, 246, 255, 0.3);
+}
+
+.si-gov-finding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.si-gov-finding-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-gov-finding-desc {
+  font-size: 0.78rem;
+  color: var(--dsw-alias-label-secondary, #475569);
+  line-height: 1.45;
+}
+
+.si-gov-evidence-box {
+  background: var(--dsw-alias-bg-base, #ffffff);
+  border: 1px dashed var(--dsw-alias-border-l2, #cbd5e1);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  color: var(--dsw-alias-label-secondary, #475569);
+}
+
+.si-gov-evidence-list {
+  margin: 4px 0 0 16px;
+  padding: 0;
+  font-family: monospace;
+}
+
+.si-gov-evidence-list li {
+  margin-bottom: 2px;
+}
+
+.si-gov-rec-box {
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  line-height: 1.45;
+}
+
+/* 抽屉样式 (Drawer) */
+.si-gov-drawer-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 9999;
+  display: flex;
+  justify-content: flex-end;
+  backdrop-filter: blur(2px);
+  animation: siFadeIn 0.15s ease-out;
+}
+
+.si-gov-drawer {
+  width: min(660px, 92vw);
+  height: 100%;
+  background: var(--dsw-alias-bg-base, #ffffff);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  z-index: 10000;
+  animation: siSlideIn 0.2s ease-out;
+}
+
+@keyframes siSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes siFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.si-gov-drawer-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e2e8f0);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+}
+
+.si-gov-drawer-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-gov-drawer-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--dsw-alias-border-l2, #cbd5e1);
+  background: var(--dsw-alias-bg-base, #ffffff);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--dsw-alias-label-secondary, #475569);
+  transition: all 0.15s ease;
+}
+
+.si-gov-drawer-close:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f5f9);
+  color: var(--dsw-alias-label-primary, #0f1115);
+}
+
+.si-gov-drawer-body {
+  flex: 1 1 0%;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.si-gov-dep-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-top: 6px;
+}
+
+.si-gov-dep-table th {
+  padding: 8px 10px;
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #cbd5e1);
+  font-weight: 600;
+  text-align: left;
+}
+
+.si-gov-dep-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, #e2e8f0);
+  vertical-align: middle;
+}
 `;
     }
 
@@ -787,6 +1274,136 @@ window.__ModuleLoader__.load({
     ];
 
     /**
+     * 纯前端安全文件下载（不经过服务端写磁盘）
+     */
+    function downloadFile(filename, content, mimeType) {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 200);
+    }
+
+    /**
+     * 即时拼装格式规范的 Markdown 依赖治理报告 (可直接贴入 GitHub Issue / PR 说明)
+     */
+    function generateMarkdownReport(data) {
+      if (!data) return '# 依赖治理报告为空';
+      const d = new Date(data.timestamp || Date.now());
+      const pad = (n) => (n < 10 ? '0' + n : n);
+      const timeStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+      let md = `# 🧭 DSH 跨项目依赖治理诊断报告\n\n`;
+      md += `> **生成时间**：${timeStr}  \n`;
+      md += `> **报告性质**：纯前端只读导出诊断报告（不触碰及修改任何项目源文件）  \n`;
+      md += `> **缓存状态**：${data.cached ? `命中缓存 (TTL: ${data.ttl}s)` : '实时全量扫描'}\n\n`;
+
+      md += `## 1. 核心治理指标 (KPI Summary)\n\n`;
+      md += `| 指标项 | 统计数值 | 治理参考解读 |\n`;
+      md += `| :--- | :---: | :--- |\n`;
+      md += `| **扫描工作区项目总数** | **${data.kpi?.totalProjects ?? 0}** 个 | 包含顶层与嵌套工作区项目 |\n`;
+      md += `| **活跃项目数 (含声明依赖)** | **${data.kpi?.activeProjects ?? 0}** 个 | 参与跨项目依赖比较的有效项目 |\n`;
+      md += `| **Node 运行环境分桶数** | **${data.kpi?.nodeBucketsCount ?? 0}** 个 | 跨项目 Node 运行时分化程度 |\n`;
+      md += `| **完全同版本依赖项** | **${data.kpi?.identicalPackagesCount ?? 0}** 个 | 跨项目锁文件版本 100% 一致 |\n`;
+      md += `| **发生版本漂移依赖项** | **${data.kpi?.driftPackagesCount ?? 0}** 个 | 存在跨版本或不同版本号引用 |\n`;
+      md += `| **阻断级治理风险项** | **${data.kpi?.blockedFindingsCount ?? 0}** 项 | 🚨 跨 Node 分桶冲突或高危问题 |\n\n`;
+
+      md += `## 2. Node 运行时环境分桶洞察 (Runtime Buckets)\n\n`;
+      md += `| 桶标识 (Bucket Key) | 环境描述 | 置信度 | 项目数 | 包含项目清单 |\n`;
+      md += `| :--- | :--- | :---: | :---: | :--- |\n`;
+      for (const b of data.nodeBuckets || []) {
+        const confLabel = b.confidence === 'exact' ? '✅ 精确锁定' : b.confidence === 'multi' ? '⚠️ 宽泛范围' : '❌ 缺失未声明';
+        md += `| \`${b.bucketKey}\` | ${b.label} | ${confLabel} | ${b.projectCount} | ${(b.projectIds || []).map((p) => '`' + p + '`').join(', ')} |\n`;
+      }
+      md += `\n`;
+
+      md += `## 3. 治理发现与处理建议 (Governance Findings)\n\n`;
+      if (!data.findings || data.findings.length === 0) {
+        md += `*未检测到跨项目依赖治理异常。*\n\n`;
+      } else {
+        for (const f of data.findings) {
+          const levelBadge =
+            f.level === 'blocked'
+              ? '🛑 [阻断 BLOCKED]'
+              : f.level === 'warn'
+              ? '⚠️ [警告 WARN]'
+              : f.level === 'candidate'
+              ? '❇️ [候选 CANDIDATE]'
+              : 'ℹ️ [提示 INFO]';
+          md += `### ${levelBadge} ${f.title}\n\n`;
+          if (f.description) {
+            md += `${f.description}\n\n`;
+          }
+          md += `**事实证据链**：\n`;
+          for (const e of f.evidence || []) {
+            md += `- ${e}\n`;
+          }
+          md += `\n**治理建议**：  \n> ${f.recommendation}\n\n`;
+          md += `**涉及项目**：${(f.projectIds || []).map((p) => '`' + p + '`').join(', ')}\n\n`;
+          md += `---\n\n`;
+        }
+      }
+
+      md += `## 4. 多消费者跨项目依赖漂移矩阵 (Multi-consumer Drift Matrix)\n\n`;
+      const multiConsumers = (data.matrix || []).filter((r) => r.consumerCount > 1);
+      const activeProjects = (data.projects || []).filter((p) => !p.isEmpty);
+
+      if (multiConsumers.length === 0) {
+        md += `*暂无多项目共享依赖项。*\n\n`;
+      } else {
+        let header = `| 依赖包名 | 类型 | 判定 | 引用项目数 | 涉及版本 |`;
+        let sep = `| :--- | :---: | :---: | :---: | :--- |`;
+        for (const p of activeProjects) {
+          header += ` ${p.name} |`;
+          sep += ` :---: |`;
+        }
+        md += `${header}\n${sep}\n`;
+
+        for (const row of multiConsumers) {
+          let line = `| \`${row.name}\` | \`${row.kind}\` | **${row.verdictLabel}** | ${row.consumerCount} | ${row.resolvedVersions.map((v) => '`' + v + '`').join(', ') || '-'} |`;
+          for (const p of activeProjects) {
+            const cell = row.projects[p.id];
+            if (!cell) {
+              line += ` - |`;
+            } else {
+              const ver = cell.resolved ? `**${cell.resolved}**` : cell.range || '-';
+              line += ` ${ver} |`;
+            }
+          }
+          md += `${line}\n`;
+        }
+        md += `\n`;
+      }
+
+      md += `\n> *本报告由 DeepSeek Harness 存储空间与依赖治理插件 (dsh-plugin-storage-inspector) 只读引擎导出。*  \n`;
+      md += `> *所有诊断基于 package.json、lockfile 及环境配置文件只读分析，未向文件系统写入任何内容。*\n`;
+
+      return md;
+    }
+
+    function exportGovernanceJson(data) {
+      if (!data) return;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `dsh-dependency-governance-report-${dateStr}.json`;
+      downloadFile(filename, JSON.stringify(data, null, 2), 'application/json');
+    }
+
+    function exportGovernanceMarkdown(data) {
+      if (!data) return;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `dsh-dependency-governance-report-${dateStr}.md`;
+      const md = generateMarkdownReport(data);
+      downloadFile(filename, md, 'text/markdown;charset=utf-8');
+    }
+
+    /**
      * 核心看板组件（支持全景存储分析与磁盘清理双模式）
      */
     function StorageInspectorDashboard() {
@@ -806,6 +1423,66 @@ window.__ModuleLoader__.load({
       const [cleanupExecuting, setCleanupExecuting] = useState(false);
       const [selectedTargetIds, setSelectedTargetIds] = useState(new Set());
       const [cleanResult, setCleanResult] = useState(null);
+
+      // 依赖治理专属状态 (SPEC-DEPENDENCY-GOVERNANCE)
+      const [govData, setGovData] = useState(null);
+      const [govLoading, setGovLoading] = useState(false);
+      const [govRefreshing, setGovRefreshing] = useState(false);
+      const [govError, setGovError] = useState(null);
+      const [matrixFilter, setMatrixFilter] = useState('all'); // all, identical, drift-major, bucket-conflict, multi-consumer
+      const [matrixKind, setMatrixKind] = useState('all'); // all, prod, dev
+      const [matrixSearch, setMatrixSearch] = useState('');
+      const [findingLevelFilter, setFindingLevelFilter] = useState('all'); // all, blocked, warn, candidate, info
+      const [drawerProjectId, setDrawerProjectId] = useState(null);
+      const [drawerData, setDrawerData] = useState(null);
+      const [drawerLoading, setDrawerLoading] = useState(false);
+      const [drawerSearch, setDrawerSearch] = useState('');
+      const [drawerKindFilter, setDrawerKindFilter] = useState('all');
+      const [activeMatrixDetailRow, setActiveMatrixDetailRow] = useState(null);
+
+      const fetchGovData = useCallback(async (isRefresh = false) => {
+        if (isRefresh) setGovRefreshing(true);
+        else setGovLoading(true);
+        setGovError(null);
+
+        try {
+          const url = isRefresh ? GOV_REFRESH_URL : GOV_OVERVIEW_URL;
+          const res = await fetch(url, {
+            method: isRefresh ? 'POST' : 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error || '获取依赖治理数据失败');
+          setGovData(json.data || json);
+        } catch (err) {
+          console.error('[storage-inspector] fetchGovData failed:', err);
+          setGovError(err.message || '获取依赖治理数据失败');
+        } finally {
+          setGovLoading(false);
+          setGovRefreshing(false);
+        }
+      }, []);
+
+      const openProjectDrawer = useCallback(async (projectId) => {
+        setDrawerProjectId(projectId);
+        setDrawerLoading(true);
+        setDrawerData(null);
+        setDrawerSearch('');
+        setDrawerKindFilter('all');
+
+        try {
+          const res = await fetch(`${GOV_PROJECT_URL}?id=${encodeURIComponent(projectId)}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error || '获取项目详情失败');
+          setDrawerData(json.data || json);
+        } catch (err) {
+          console.error('[storage-inspector] openProjectDrawer failed:', err);
+        } finally {
+          setDrawerLoading(false);
+        }
+      }, []);
 
       useEffect(() => {
         ensureStyles();
@@ -1121,12 +1798,18 @@ window.__ModuleLoader__.load({
             h(
               'h2',
               null,
-              mainView === 'dashboard' ? '💾 本地存储空间全景分析' : '🧹 本地磁盘智能清理与空间释放'
+              mainView === 'governance'
+                ? '🧭 跨项目依赖治理诊断'
+                : mainView === 'dashboard'
+                ? '💾 本地存储空间全景分析'
+                : '🧹 本地磁盘智能清理与空间释放'
             ),
             h(
               'p',
               null,
-              mainView === 'dashboard'
+              mainView === 'governance'
+                ? '多工作区依赖版本漂移分析与 Node 运行环境分桶洞察；严格只读诊断，绝不修改任何本地项目或配置'
+                : mainView === 'dashboard'
                 ? `精确统计每个工作区的项目代码、依赖包、构建产物、文件及全部 ${summary.totalSessions || 0} 个对话 Session 记录`
                 : '深度排查系统开发缓存、工作区构建垃圾、DSH 历史归档与冗余依赖，安全释放数 GB 磁盘空间'
             )
@@ -1166,25 +1849,78 @@ window.__ModuleLoader__.load({
                       formatBytes(cleanupData.safeCleanableBytes)
                     )
                   : null
+              ),
+              h(
+                'button',
+                {
+                  className: `si-main-tab-btn ${mainView === 'governance' ? 'active' : ''}`,
+                  onClick: () => {
+                    setMainView('governance');
+                    if (!govData && !govLoading) fetchGovData(false);
+                  }
+                },
+                '🧭 依赖治理',
+                h(
+                  'span',
+                  {
+                    className: 'si-badge si-badge-blue',
+                    style: { marginLeft: '2px', fontSize: '0.68rem', padding: '1px 5px' }
+                  },
+                  '只读'
+                )
               )
             ),
-            h(
-              'button',
-              {
-                className: 'si-btn',
-                onClick: () => {
-                  fetchData(true);
-                  fetchCleanupTargets();
-                },
-                disabled: refreshing || cleanupLoading
-              },
-              refreshing || cleanupLoading ? '正在扫描...' : '🔄 重新扫描'
-            )
+            mainView === 'governance'
+              ? h(
+                  React.Fragment,
+                  null,
+                  h(
+                    'button',
+                    {
+                      className: 'si-btn',
+                      onClick: () => exportGovernanceJson(govData),
+                      disabled: !govData || govLoading
+                    },
+                    '⬇️ 导出 JSON'
+                  ),
+                  h(
+                    'button',
+                    {
+                      className: 'si-btn',
+                      onClick: () => exportGovernanceMarkdown(govData),
+                      disabled: !govData || govLoading
+                    },
+                    '📝 导出 Markdown'
+                  ),
+                  h(
+                    'button',
+                    {
+                      className: 'si-btn si-btn-primary',
+                      onClick: () => fetchGovData(true),
+                      disabled: govRefreshing || govLoading
+                    },
+                    govRefreshing ? '正在分析...' : '🔄 强制刷新'
+                  )
+                )
+              : h(
+                  'button',
+                  {
+                    className: 'si-btn',
+                    onClick: () => {
+                      fetchData(true);
+                      fetchCleanupTargets();
+                    },
+                    disabled: refreshing || cleanupLoading
+                  },
+                  refreshing || cleanupLoading ? '正在扫描...' : '🔄 重新扫描'
+                )
           )
         ),
 
-        // 2. 根据 mainView 渲染看板视图或清理视图
-        mainView === 'cleaner'
+        // 2. 根据 mainView 渲染治理视图、清理视图或看板视图
+        mainView === 'governance'
+          ? renderGovernanceView()
+          : mainView === 'cleaner'
           ? // ==================== 磁盘清理中心视图 ====================
             h(
               'div',
@@ -2046,7 +2782,8 @@ window.__ModuleLoader__.load({
                       );
                     })
               )
-            )
+            ),
+        drawerProjectId ? renderProjectDrawer() : null
       );
     }
 
