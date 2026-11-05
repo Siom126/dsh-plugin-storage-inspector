@@ -64,10 +64,10 @@ window.__ModuleLoader__.load({
       return null;
     }
 
-    // 格式化字节数
-    function formatBytes(bytes) {
+    // 格式化字节数（支持十进制标准 decimal=true，与 macOS 存储空间及硬盘标称对齐）
+    function formatBytes(bytes, decimal = false) {
       if (bytes === 0 || !bytes || isNaN(bytes)) return '0 B';
-      const k = 1024;
+      const k = decimal ? 1000 : 1024;
       const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return (bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 2) + ' ' + sizes[i];
