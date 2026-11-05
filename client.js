@@ -101,8 +101,76 @@ window.__ModuleLoader__.load({
 .si-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 本地磁盘总可用/已用空间胶囊组件 */
+.si-disk-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  background: var(--dsw-alias-bg-layer-1, #f8fafc);
+  border: 1px solid var(--dsw-alias-border-l1, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.si-disk-widget:hover {
+  border-color: var(--dsw-alias-border-l2, #cbd5e1);
+  background: var(--dsw-alias-bg-layer-2, #ffffff);
+}
+
+.si-disk-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.si-disk-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 145px;
+}
+
+.si-disk-text-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  line-height: 1.2;
+}
+
+.si-disk-primary {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  font-size: 0.8rem;
+}
+
+.si-disk-secondary {
+  color: var(--dsw-alias-label-secondary, #64748b);
+  font-size: 0.72rem;
+}
+
+.si-disk-bar-bg {
+  width: 100%;
+  height: 5px;
+  background: var(--dsw-alias-fill-layer-2, #e2e8f0);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.si-disk-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 主视图切换 Tab */
@@ -2736,6 +2804,62 @@ window.__ModuleLoader__.load({
                 )
               )
             ),
+
+            // 本地磁盘总可用与已用空间占比指标小部件 (显示在右侧 Header)
+            (() => {
+              const disk = summary?.systemDisk;
+              if (!disk || !disk.supported || !disk.totalBytes) return null;
+
+              const usedPct = disk.usedPercent ?? 0;
+              const availPct = disk.availablePercent ?? (100 - usedPct);
+              const barColor =
+                usedPct >= 90
+                  ? '#ef4444' // 危险红色
+                  : usedPct >= 75
+                  ? '#f59e0b' // 告警琥珀色
+                  : '#10b981'; // 健康绿色
+
+              const tooltip = `本地磁盘空间 (${disk.mount || '根分区'}):\n总容量: ${formatBytes(disk.totalBytes)}\n已用空间: ${formatBytes(disk.usedBytes)} (${usedPct}%)\n可用空间: ${formatBytes(disk.availableBytes)} (${availPct}%)`;
+
+              return h(
+                'div',
+                {
+                  className: 'si-disk-widget',
+                  title: tooltip
+                },
+                h('div', { className: 'si-disk-icon-wrap' }, '💽'),
+                h(
+                  'div',
+                  { className: 'si-disk-info' },
+                  h(
+                    'div',
+                    { className: 'si-disk-text-row' },
+                    h(
+                      'span',
+                      { className: 'si-disk-primary' },
+                      `可用 ${formatBytes(disk.availableBytes)}`
+                    ),
+                    h(
+                      'span',
+                      { className: 'si-disk-secondary' },
+                      `已用 ${usedPct}%`
+                    )
+                  ),
+                  h(
+                    'div',
+                    { className: 'si-disk-bar-bg' },
+                    h('div', {
+                      className: 'si-disk-bar-fill',
+                      style: {
+                        width: `${Math.min(100, Math.max(0, usedPct))}%`,
+                        background: barColor
+                      }
+                    })
+                  )
+                )
+              );
+            })(),
+
             mainView === 'governance'
               ? h(
                   'button',
