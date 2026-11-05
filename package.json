@@ -1,9 +1,12 @@
 {
   "name": "dsh-plugin-storage-inspector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "DeepSeek Harness 存储空间分析插件：在设置页面查看每个工作区及每个对话占据的本地存储空间（含Session、组件、依赖、项目代码、项目文件等）",
   "type": "module",
   "main": "index.js",
+  "scripts": {
+    "test": "node --test tests/**/*.test.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js"
