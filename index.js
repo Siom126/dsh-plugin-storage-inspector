@@ -85,7 +85,10 @@ export function apply(ctx) {
       'refresh',
       'workspace',
       'cleanup/targets',
-      'cleanup/execute'
+      'cleanup/execute',
+      'deps/overview',
+      'deps/project',
+      'deps/refresh'
     ];
 
     for (const subPath of registeredSubPaths) {
@@ -95,7 +98,7 @@ export function apply(ctx) {
         fetch: fetchHandler
       });
     }
-    ctx.logger?.info?.('[storage-inspector] Connection Fetch 路由已就绪（含磁盘清理接口）');
+    ctx.logger?.info?.('[storage-inspector] Connection Fetch 路由已就绪（含磁盘清理与依赖治理接口）');
   });
 
   ctx.logger?.info?.('[storage-inspector] 存储空间与磁盘清理插件宿主端加载完成');
