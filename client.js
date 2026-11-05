@@ -1549,6 +1549,9 @@ window.__ModuleLoader__.load({
           const json = await res.json();
           if (!json.ok) throw new Error(json.error || '获取存储空间数据失败');
           setData(json.data);
+          if (json.data && json.data.summary && json.data.summary.systemDisk) {
+            setGlobalDiskStats(json.data.summary.systemDisk);
+          }
 
           // 默认展开第一个或最大的工作区
           if (json.data && json.data.workspaces && json.data.workspaces.length > 0) {
@@ -3890,9 +3893,7 @@ window.__ModuleLoader__.load({
         const unsubscribe = subscribeDiskStats((stats) => {
           setDiskStats(stats);
         });
-        if (!globalDiskStats) {
-          fetchDiskStats();
-        }
+        fetchDiskStats();
         return unsubscribe;
       }, []);
 
@@ -3903,12 +3904,13 @@ window.__ModuleLoader__.load({
         if (!btn) return;
 
         let badge = btn.querySelector('.si-sidebar-badge');
-        if (!diskStats) {
+        // 当尚未获取到数据或 totalBytes 为 0 时，不显示 0.0% 徽标，避免渲染出未就绪的默认值
+        if (!diskStats || !diskStats.supported || !diskStats.totalBytes) {
           if (badge) badge.remove();
           return;
         }
 
-        const pct = diskStats.usedPercent || 0;
+        const pct = typeof diskStats.usedPercent === 'number' ? diskStats.usedPercent : 0;
         const pctStr = pct.toFixed(1) + '%';
         const colorClass =
           pct >= 90
@@ -3929,16 +3931,23 @@ window.__ModuleLoader__.load({
       }, [diskStats]);
 
       // 提取占比与警戒色（<80% 翡翠绿, 80%-90% 琥珀黄, >=90% 警示红）
-      const pct = diskStats?.usedPercent || 0;
+      const hasValidStats = !!(diskStats && diskStats.supported && diskStats.totalBytes);
+      const pct = hasValidStats ? (diskStats.usedPercent || 0) : null;
       const dotColor =
-        pct >= 90 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#10b981';
+        pct !== null
+          ? pct >= 90
+            ? '#ef4444'
+            : pct >= 80
+            ? '#f59e0b'
+            : '#10b981'
+          : 'transparent';
 
       return h(
         'span',
         {
           ref: iconRef,
           className: 'si-sidebar-icon-wrap',
-          title: diskStats
+          title: hasValidStats
             ? `本地磁盘空间：可用 ${formatBytes(diskStats.freeBytes)} / 已用 ${pct.toFixed(1)}%`
             : '本地存储空间分析'
         },
