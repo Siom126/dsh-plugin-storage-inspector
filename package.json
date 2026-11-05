@@ -1,7 +1,18 @@
 {
   "name": "dsh-plugin-storage-inspector",
   "version": "1.1.0",
-  "description": "DeepSeek Harness 存储空间分析插件：在设置页面查看每个工作区及每个对话占据的本地存储空间（含Session、组件、依赖、项目代码、项目文件等）",
+  "description": "DeepSeek Harness 本地存储空间全景洞察与跨项目依赖治理插件：分析工作区磁盘体积、会话Session记录、物理文件类别剖析；只读扫描跨项目package/lockfile依赖，检测版本漂移、Node环境分桶与治理风险。 | DSH storage analyzer & read-only cross-project dependency governance plugin.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "storage",
+    "storage-inspector",
+    "dependency-governance",
+    "drift-matrix",
+    "node-version",
+    "cordis"
+  ],
   "type": "module",
   "main": "index.js",
   "scripts": {
