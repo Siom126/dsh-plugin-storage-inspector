@@ -1273,135 +1273,7 @@ window.__ModuleLoader__.load({
       }
     ];
 
-    /**
-     * 纯前端安全文件下载（不经过服务端写磁盘）
-     */
-    function downloadFile(filename, content, mimeType) {
-      if (typeof window === 'undefined' || typeof document === 'undefined') return;
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 200);
-    }
 
-    /**
-     * 即时拼装格式规范的 Markdown 依赖治理报告 (可直接贴入 GitHub Issue / PR 说明)
-     */
-    function generateMarkdownReport(data) {
-      if (!data) return '# 依赖治理报告为空';
-      const d = new Date(data.timestamp || Date.now());
-      const pad = (n) => (n < 10 ? '0' + n : n);
-      const timeStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-
-      let md = `# 🧭 DSH 跨项目依赖治理诊断报告\n\n`;
-      md += `> **生成时间**：${timeStr}  \n`;
-      md += `> **报告性质**：纯前端只读导出诊断报告（不触碰及修改任何项目源文件）  \n`;
-      md += `> **缓存状态**：${data.cached ? `命中缓存 (TTL: ${data.ttl}s)` : '实时全量扫描'}\n\n`;
-
-      md += `## 1. 核心治理指标 (KPI Summary)\n\n`;
-      md += `| 指标项 | 统计数值 | 治理参考解读 |\n`;
-      md += `| :--- | :---: | :--- |\n`;
-      md += `| **扫描工作区项目总数** | **${data.kpi?.totalProjects ?? 0}** 个 | 包含顶层与嵌套工作区项目 |\n`;
-      md += `| **活跃项目数 (含声明依赖)** | **${data.kpi?.activeProjects ?? 0}** 个 | 参与跨项目依赖比较的有效项目 |\n`;
-      md += `| **Node 运行环境分桶数** | **${data.kpi?.nodeBucketsCount ?? 0}** 个 | 跨项目 Node 运行时分化程度 |\n`;
-      md += `| **完全同版本依赖项** | **${data.kpi?.identicalPackagesCount ?? 0}** 个 | 跨项目锁文件版本 100% 一致 |\n`;
-      md += `| **发生版本漂移依赖项** | **${data.kpi?.driftPackagesCount ?? 0}** 个 | 存在跨版本或不同版本号引用 |\n`;
-      md += `| **阻断级治理风险项** | **${data.kpi?.blockedFindingsCount ?? 0}** 项 | 🚨 跨 Node 分桶冲突或高危问题 |\n\n`;
-
-      md += `## 2. Node 运行时环境分桶洞察 (Runtime Buckets)\n\n`;
-      md += `| 桶标识 (Bucket Key) | 环境描述 | 置信度 | 项目数 | 包含项目清单 |\n`;
-      md += `| :--- | :--- | :---: | :---: | :--- |\n`;
-      for (const b of data.nodeBuckets || []) {
-        const confLabel = b.confidence === 'exact' ? '✅ 精确锁定' : b.confidence === 'multi' ? '⚠️ 宽泛范围' : '❌ 缺失未声明';
-        md += `| \`${b.bucketKey}\` | ${b.label} | ${confLabel} | ${b.projectCount} | ${(b.projectIds || []).map((p) => '`' + p + '`').join(', ')} |\n`;
-      }
-      md += `\n`;
-
-      md += `## 3. 治理发现与处理建议 (Governance Findings)\n\n`;
-      if (!data.findings || data.findings.length === 0) {
-        md += `*未检测到跨项目依赖治理异常。*\n\n`;
-      } else {
-        for (const f of data.findings) {
-          const levelBadge =
-            f.level === 'blocked'
-              ? '🛑 [阻断 BLOCKED]'
-              : f.level === 'warn'
-              ? '⚠️ [警告 WARN]'
-              : f.level === 'candidate'
-              ? '❇️ [候选 CANDIDATE]'
-              : 'ℹ️ [提示 INFO]';
-          md += `### ${levelBadge} ${f.title}\n\n`;
-          if (f.description) {
-            md += `${f.description}\n\n`;
-          }
-          md += `**事实证据链**：\n`;
-          for (const e of f.evidence || []) {
-            md += `- ${e}\n`;
-          }
-          md += `\n**治理建议**：  \n> ${f.recommendation}\n\n`;
-          md += `**涉及项目**：${(f.projectIds || []).map((p) => '`' + p + '`').join(', ')}\n\n`;
-          md += `---\n\n`;
-        }
-      }
-
-      md += `## 4. 多消费者跨项目依赖漂移矩阵 (Multi-consumer Drift Matrix)\n\n`;
-      const multiConsumers = (data.matrix || []).filter((r) => r.consumerCount > 1);
-      const activeProjects = (data.projects || []).filter((p) => !p.isEmpty);
-
-      if (multiConsumers.length === 0) {
-        md += `*暂无多项目共享依赖项。*\n\n`;
-      } else {
-        let header = `| 依赖包名 | 类型 | 判定 | 引用项目数 | 涉及版本 |`;
-        let sep = `| :--- | :---: | :---: | :---: | :--- |`;
-        for (const p of activeProjects) {
-          header += ` ${p.name} |`;
-          sep += ` :---: |`;
-        }
-        md += `${header}\n${sep}\n`;
-
-        for (const row of multiConsumers) {
-          let line = `| \`${row.name}\` | \`${row.kind}\` | **${row.verdictLabel}** | ${row.consumerCount} | ${row.resolvedVersions.map((v) => '`' + v + '`').join(', ') || '-'} |`;
-          for (const p of activeProjects) {
-            const cell = row.projects[p.id];
-            if (!cell) {
-              line += ` - |`;
-            } else {
-              const ver = cell.resolved ? `**${cell.resolved}**` : cell.range || '-';
-              line += ` ${ver} |`;
-            }
-          }
-          md += `${line}\n`;
-        }
-        md += `\n`;
-      }
-
-      md += `\n> *本报告由 DeepSeek Harness 存储空间与依赖治理插件 (dsh-plugin-storage-inspector) 只读引擎导出。*  \n`;
-      md += `> *所有诊断基于 package.json、lockfile 及环境配置文件只读分析，未向文件系统写入任何内容。*\n`;
-
-      return md;
-    }
-
-    function exportGovernanceJson(data) {
-      if (!data) return;
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const filename = `dsh-dependency-governance-report-${dateStr}.json`;
-      downloadFile(filename, JSON.stringify(data, null, 2), 'application/json');
-    }
-
-    function exportGovernanceMarkdown(data) {
-      if (!data) return;
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const filename = `dsh-dependency-governance-report-${dateStr}.md`;
-      const md = generateMarkdownReport(data);
-      downloadFile(filename, md, 'text/markdown;charset=utf-8');
-    }
 
     /**
      * 核心看板组件（支持全景存储分析与磁盘清理双模式）
@@ -2866,35 +2738,13 @@ window.__ModuleLoader__.load({
             ),
             mainView === 'governance'
               ? h(
-                  React.Fragment,
-                  null,
-                  h(
-                    'button',
-                    {
-                      className: 'si-btn',
-                      onClick: () => exportGovernanceJson(govData),
-                      disabled: !govData || govLoading
-                    },
-                    '⬇️ 导出 JSON'
-                  ),
-                  h(
-                    'button',
-                    {
-                      className: 'si-btn',
-                      onClick: () => exportGovernanceMarkdown(govData),
-                      disabled: !govData || govLoading
-                    },
-                    '📝 导出 Markdown'
-                  ),
-                  h(
-                    'button',
-                    {
-                      className: 'si-btn si-btn-primary',
-                      onClick: () => fetchGovData(true),
-                      disabled: govRefreshing || govLoading
-                    },
+                  'button',
+                  {
+                    className: 'si-btn si-btn-primary',
+                    onClick: () => fetchGovData(true),
+                    disabled: govRefreshing || govLoading
+                  },
                     govRefreshing ? '正在分析...' : '🔄 强制刷新'
-                  )
                 )
               : h(
                   'button',
