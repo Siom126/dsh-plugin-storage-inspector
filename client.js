@@ -20,6 +20,49 @@ window.__ModuleLoader__.load({
     const GOV_OVERVIEW_URL = '/api/storage-inspector/deps/overview';
     const GOV_PROJECT_URL = '/api/storage-inspector/deps/project';
     const GOV_REFRESH_URL = '/api/storage-inspector/deps/refresh';
+    const DISK_API_URL = '/api/storage-inspector/disk';
+
+    // 全局磁盘空间状态与监听总线（驱动左侧边栏实时占比徽标）
+    let globalDiskStats = null;
+    const diskStatsListeners = new Set();
+
+    function setGlobalDiskStats(stats) {
+      if (!stats) return;
+      globalDiskStats = stats;
+      diskStatsListeners.forEach((fn) => {
+        try {
+          fn(stats);
+        } catch (e) {
+          console.error('[storage-inspector] disk listener error:', e);
+        }
+      });
+    }
+
+    function subscribeDiskStats(listener) {
+      diskStatsListeners.add(listener);
+      if (globalDiskStats) {
+        try {
+          listener(globalDiskStats);
+        } catch (e) {}
+      }
+      return () => {
+        diskStatsListeners.delete(listener);
+      };
+    }
+
+    async function fetchDiskStats() {
+      try {
+        const res = await fetch(DISK_API_URL);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.data) {
+            setGlobalDiskStats(json.data);
+            return json.data;
+          }
+        }
+      } catch (err) {}
+      return null;
+    }
 
     // 格式化字节数
     function formatBytes(bytes) {
@@ -1283,6 +1326,69 @@ window.__ModuleLoader__.load({
   padding: 7px 10px;
   border-bottom: 1px solid var(--dsw-alias-border-l1, #e2e8f0);
   vertical-align: middle;
+}
+
+/* ==================== 左侧边栏存储占比徽标与图标样式 ==================== */
+.si-sidebar-badge {
+  margin-left: auto;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  line-height: 16px;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.si-sidebar-badge-green {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.si-sidebar-badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.si-sidebar-badge-red {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+/* 侧边栏折叠模式下隐藏文字胶囊，仅保留图标指示点 */
+:has(.kB3qhq_collapsed) .si-sidebar-badge,
+.kB3qhq_collapsed .si-sidebar-badge {
+  display: none !important;
+}
+
+.si-sidebar-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.si-sidebar-dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dsw-alias-surface-l1, #ffffff);
+  box-sizing: content-box;
 }
 `;
     }
@@ -3778,25 +3884,89 @@ window.__ModuleLoader__.load({
     }
 
     function StorageSidebarIcon() {
-      // 侧栏图标
+      const [diskStats, setDiskStats] = useState(globalDiskStats);
+
+      useEffect(() => {
+        const unsubscribe = subscribeDiskStats((stats) => {
+          setDiskStats(stats);
+        });
+        if (!globalDiskStats) {
+          fetchDiskStats();
+        }
+        return unsubscribe;
+      }, []);
+
+      // 动态向左侧栏整个按钮容器挂载/更新右侧胶囊徽标（展示已用占比百分比）
+      const iconRef = useCallback((node) => {
+        if (!node || typeof document === 'undefined') return;
+        const btn = node.closest('button, [role="button"], .kB3qhq_panelRow');
+        if (!btn) return;
+
+        let badge = btn.querySelector('.si-sidebar-badge');
+        if (!diskStats) {
+          if (badge) badge.remove();
+          return;
+        }
+
+        const pct = diskStats.usedPercent || 0;
+        const pctStr = pct.toFixed(1) + '%';
+        const colorClass =
+          pct >= 90
+            ? 'si-sidebar-badge-red'
+            : pct >= 80
+            ? 'si-sidebar-badge-amber'
+            : 'si-sidebar-badge-green';
+
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = `si-sidebar-badge ${colorClass}`;
+          badge.textContent = pctStr;
+          btn.appendChild(badge);
+        } else {
+          badge.className = `si-sidebar-badge ${colorClass}`;
+          badge.textContent = pctStr;
+        }
+      }, [diskStats]);
+
+      // 提取占比与警戒色（<80% 翡翠绿, 80%-90% 琥珀黄, >=90% 警示红）
+      const pct = diskStats?.usedPercent || 0;
+      const dotColor =
+        pct >= 90 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#10b981';
+
       return h(
-        'svg',
+        'span',
         {
-          viewBox: '0 0 24 24',
-          width: '18',
-          height: '18',
-          fill: 'none',
-          stroke: 'currentColor',
-          strokeWidth: '2',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round'
+          ref: iconRef,
+          className: 'si-sidebar-icon-wrap',
+          title: diskStats
+            ? `本地磁盘空间：可用 ${formatBytes(diskStats.freeBytes)} / 已用 ${pct.toFixed(1)}%`
+            : '本地存储空间分析'
         },
-        h('line', { x1: '22', y1: '12', x2: '2', y2: '12' }),
-        h('path', {
-          d: 'M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'
-        }),
-        h('line', { x1: '6', y1: '16', x2: '6.01', y2: '16' }),
-        h('line', { x1: '10', y1: '16', x2: '10.01', y2: '16' })
+        h(
+          'svg',
+          {
+            viewBox: '0 0 24 24',
+            width: '18',
+            height: '18',
+            fill: 'none',
+            stroke: 'currentColor',
+            strokeWidth: '2',
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round'
+          },
+          h('line', { x1: '22', y1: '12', x2: '2', y2: '12' }),
+          h('path', {
+            d: 'M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'
+          }),
+          h('line', { x1: '6', y1: '16', x2: '6.01', y2: '16' }),
+          h('line', { x1: '10', y1: '16', x2: '10.01', y2: '16' })
+        ),
+        diskStats
+          ? h('span', {
+              className: 'si-sidebar-dot',
+              style: { backgroundColor: dotColor }
+            })
+          : null
       );
     }
 
