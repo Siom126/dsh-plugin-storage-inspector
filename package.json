@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-storage-inspector",
-  "version": "1.1.0",
-  "description": "DeepSeek Harness 本地存储空间全景洞察与跨项目依赖治理插件：分析工作区磁盘体积、会话Session记录、物理文件类别剖析；只读扫描跨项目package/lockfile依赖，检测版本漂移、Node环境分桶与治理风险。 | DSH storage analyzer & read-only cross-project dependency governance plugin.",
+  "version": "1.1.1",
+  "description": "DeepSeek Harness 本地存储空间分析与跨项目依赖治理插件：按工作区/会话/文件类别剖析磁盘占用，可选清理白名单内的构建、依赖、归档会话与缓存目录；跨工作区只读扫描 package.json 与 npm 锁文件，输出版本漂移与 Node 分桶冲突矩阵。 | DSH storage analyzer with opt-in allow-listed cleanup, plus a read-only cross-project dependency drift matrix.",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -13,11 +13,10 @@
     "node-version",
     "cordis"
   ],
+  "author": "Siom126",
+  "license": "MIT",
   "type": "module",
   "main": "index.js",
-  "scripts": {
-    "test": "node --test tests/**/*.test.mjs"
-  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js"
@@ -35,7 +34,9 @@
     "client.js",
     "cordis.patch.yml",
     "lib",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "dsh": {
     "bundle": {
@@ -52,5 +53,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "license": "MIT"
+  "scripts": {
+    "test": "node --test tests/**/*.test.mjs"
+  }
 }
